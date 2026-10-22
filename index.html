@@ -393,14 +393,25 @@
         estado.textContent =
           "Cámara activa. Escaneá el primer producto.";
 
-      } catch (error) {
-        console.error("Error al abrir la cámara:", error);
-        await detenerEscaner();
+      
+} catch (error) {
+  console.error("Error al abrir la cámara:", error);
+  await detenerEscaner();
 
-        estado.textContent =
-          "No se pudo abrir la cámara. Permití el acceso " +
-          "a la cámara y verificá que estés usando HTTPS.";
-      }
+  const nombreError = error?.name || "Error desconocido";
+  const mensajeError = error?.message || "Sin detalles";
+
+  estado.textContent =
+    "Error de cámara (" + nombreError + "): " + mensajeError;
+
+  console.error("Detalle del error:", {
+    nombre: nombreError,
+    mensaje: mensajeError,
+    seguro: window.isSecureContext,
+    mediaDevicesDisponible: !!navigator.mediaDevices
+  });
+}
+
     });
 
     // CERRAR LA CÁMARA MANUALMENTE
