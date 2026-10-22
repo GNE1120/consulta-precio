@@ -5,8 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Consulta de precios</title>
+
   <style>
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       padding: 20px;
@@ -17,6 +19,7 @@
       background: #f1f4f9;
       color: #172033;
     }
+
     .panel {
       width: 100%;
       max-width: 440px;
@@ -25,8 +28,23 @@
       border-radius: 18px;
       box-shadow: 0 8px 30px #00000012;
     }
-    h1 { margin-top: 0; text-align: center; font-size: 26px; }
-    p { color: #647084; line-height: 1.5; }
+
+    h1 {
+      margin-top: 0;
+      text-align: center;
+      font-size: 26px;
+    }
+
+    h2 {
+      font-size: 20px;
+      overflow-wrap: anywhere;
+    }
+
+    p {
+      color: #647084;
+      line-height: 1.5;
+    }
+
     input {
       width: 100%;
       padding: 13px;
@@ -35,6 +53,7 @@
       border-radius: 9px;
       font-size: 16px;
     }
+
     button {
       width: 100%;
       padding: 14px;
@@ -47,16 +66,37 @@
       font-weight: bold;
       cursor: pointer;
     }
-    button:disabled { opacity: .6; cursor: wait; }
-    #salir { background: #e9edf5; color: #172033; }
-    #estado { overflow-wrap: anywhere; font-size: 14px; }
-    #buscador, #resultado { margin-top: 22px; }
+
+    button:disabled {
+      opacity: .6;
+      cursor: wait;
+    }
+
+    #salir {
+      background: #e9edf5;
+      color: #172033;
+    }
+
+    #cerrarEscaner {
+      background: #b42318;
+    }
+
+    #estado {
+      overflow-wrap: anywhere;
+      font-size: 14px;
+    }
+
+    #buscador, #resultado {
+      margin-top: 22px;
+    }
+
     #resultado {
       padding: 16px;
       border-radius: 12px;
       background: #f5f7fb;
       overflow-wrap: anywhere;
     }
+
     .precio {
       display: flex;
       justify-content: space-between;
@@ -64,20 +104,48 @@
       padding: 11px 0;
       border-bottom: 1px solid #dfe4ec;
     }
-    .precio:last-child { border-bottom: 0; }
-    .valor { font-weight: bold; text-align: right; }
-    [hidden] { display: none !important; }
+
+    .precio:last-child {
+      border-bottom: 0;
+    }
+
+    .valor {
+      font-weight: bold;
+      text-align: right;
+    }
+
+    #lector {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+
+    #lector video {
+      border-radius: 10px;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
   </style>
 </head>
+
 <body>
   <main class="panel">
     <h1>Consulta de precios</h1>
+
     <p id="estado">Verificando sesión...</p>
 
-    <button id="entrar">Continuar con Google</button>
+    <button id="entrar" type="button">
+      Continuar con Google
+    </button>
 
     <section id="buscador" hidden>
-      <p>Ingresá o escaneá el código de barras del producto.</p>
+      <p>
+        Ingresá el código manualmente o escaneá el código de barras
+        del producto con la cámara.
+      </p>
+
       <form id="formulario">
         <input
           id="codigo"
@@ -86,24 +154,52 @@
           autocomplete="off"
           required
         >
-        <button id="consultar" type="submit">Consultar precio</button>
+
+        <button id="consultar" type="submit">
+          Consultar precio
+        </button>
       </form>
+
+      <button id="abrirEscaner" type="button">
+        Escanear código de barras con la cámara
+      </button>
+
+      <div id="zonaEscaner" hidden>
+        <p>
+          Apuntá la cámara trasera al código de barras
+          del producto y mantenelo dentro del recuadro.
+        </p>
+
+        <div id="lector"></div>
+
+        <button id="cerrarEscaner" type="button">
+          Cerrar cámara
+        </button>
+      </div>
+
       <div id="resultado" hidden></div>
     </section>
 
-    <button id="salir" hidden>Cerrar sesión</button>
+    <button id="salir" type="button" hidden>
+      Cerrar sesión
+    </button>
   </main>
+
+  <!-- Biblioteca para leer códigos de barras -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <script type="module">
     import { initializeApp } from
       "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+
     import {
       getAuth,
       GoogleAuthProvider,
       signInWithPopup,
       signOut,
       onAuthStateChanged
-    } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+    } from
+      "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDmOBSD4DGJr1Lntj3b34ibTwtvN1snwa0",
@@ -129,39 +225,174 @@
     const consultar = document.getElementById("consultar");
     const resultado = document.getElementById("resultado");
 
+    const abrirEscaner = document.getElementById("abrirEscaner");
+    const cerrarEscaner = document.getElementById("cerrarEscaner");
+    const zonaEscaner = document.getElementById("zonaEscaner");
+
+    let lectorCodigo = null;
+    let escaneoActivo = false;
+    let procesandoLectura = false;
+
+    // INICIAR SESIÓN CON GOOGLE
     entrar.addEventListener("click", async () => {
       estado.textContent = "Abriendo inicio de sesión...";
       entrar.disabled = true;
+
       try {
         await signInWithPopup(auth, provider);
       } catch (error) {
-        estado.textContent = "No se pudo iniciar sesión: " + error.message;
+        estado.textContent =
+          "No se pudo iniciar sesión: " + error.message;
       } finally {
         entrar.disabled = false;
       }
     });
 
+    // CERRAR SESIÓN
     salir.addEventListener("click", async () => {
-      await signOut(auth);
-      resultado.hidden = true;
-      resultado.replaceChildren();
+      await detenerEscaner();
+
+      try {
+        await signOut(auth);
+        resultado.hidden = true;
+        resultado.replaceChildren();
+        codigo.value = "";
+      } catch (error) {
+        estado.textContent = "No se pudo cerrar la sesión.";
+      }
     });
 
+    // CONTROLAR LA SESIÓN
     onAuthStateChanged(auth, (usuario) => {
       if (usuario) {
         estado.textContent =
-          "Sesión iniciada: " + (usuario.email || "cuenta de Google");
+          "Sesión iniciada: " +
+          (usuario.email || "cuenta de Google");
+
         entrar.hidden = true;
         salir.hidden = false;
         buscador.hidden = false;
       } else {
-        estado.textContent = "Iniciá sesión con tu cuenta de Google.";
+        estado.textContent =
+          "Iniciá sesión con tu cuenta de Google.";
+
         entrar.hidden = false;
         salir.hidden = true;
         buscador.hidden = true;
       }
     });
 
+    // ABRIR LA CÁMARA Y LEER EL CÓDIGO DE BARRAS
+    abrirEscaner.addEventListener("click", async () => {
+      if (!auth.currentUser) {
+        estado.textContent = "Primero iniciá sesión con Google.";
+        return;
+      }
+
+      if (!window.Html5Qrcode) {
+        estado.textContent =
+          "No se pudo cargar el lector. Revisá tu conexión e intentá nuevamente.";
+        return;
+      }
+
+      abrirEscaner.disabled = true;
+      zonaEscaner.hidden = false;
+      estado.textContent = "Preparando la cámara...";
+      procesandoLectura = false;
+
+      try {
+        lectorCodigo = new Html5Qrcode("lector", {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.ITF
+          ],
+          verbose: false
+        });
+
+        await lectorCodigo.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: (ancho, alto) => {
+              const anchoCaja = Math.min(ancho * 0.9, 340);
+              const altoCaja = Math.min(alto * 0.45, 180);
+
+              return {
+                width: Math.floor(anchoCaja),
+                height: Math.floor(altoCaja)
+              };
+            },
+            aspectRatio: 1.777
+          },
+          async (codigoLeido) => {
+            if (procesandoLectura) return;
+
+            procesandoLectura = true;
+            codigo.value = codigoLeido.trim();
+
+            estado.textContent =
+              "Código leído. Buscando el producto...";
+
+            await detenerEscaner();
+            formulario.requestSubmit();
+          },
+          () => {
+            // No mostrar errores por cada fotograma sin lectura.
+          }
+        );
+
+        escaneoActivo = true;
+        estado.textContent =
+          "Cámara activa. Enfocá el código de barras.";
+
+      } catch (error) {
+        console.error("Error al iniciar el escáner:", error);
+
+        await detenerEscaner();
+
+        estado.textContent =
+          "No se pudo abrir la cámara. Permití el acceso a la cámara " +
+          "y verificá que la página use HTTPS.";
+      }
+    });
+
+    // CERRAR LA CÁMARA
+    cerrarEscaner.addEventListener("click", async () => {
+      await detenerEscaner();
+      estado.textContent = auth.currentUser
+        ? "Cámara cerrada. Podés consultar otro producto."
+        : "Iniciá sesión con tu cuenta de Google.";
+    });
+
+    async function detenerEscaner() {
+      if (lectorCodigo) {
+        try {
+          if (escaneoActivo) {
+            await lectorCodigo.stop();
+          }
+        } catch (error) {
+          console.warn("No se pudo detener normalmente la cámara.", error);
+        }
+
+        try {
+          await lectorCodigo.clear();
+        } catch (error) {
+          console.warn("No se pudo limpiar el lector.", error);
+        }
+      }
+
+      lectorCodigo = null;
+      escaneoActivo = false;
+      zonaEscaner.hidden = true;
+      abrirEscaner.disabled = false;
+    }
+
+    // CONSULTAR EL PRODUCTO EN EL SERVIDOR
     formulario.addEventListener("submit", async (evento) => {
       evento.preventDefault();
 
@@ -175,13 +406,18 @@
 
       try {
         const usuario = auth.currentUser;
-        if (!usuario) throw new Error("Iniciá sesión nuevamente.");
+
+        if (!usuario) {
+          throw new Error("Iniciá sesión nuevamente.");
+        }
 
         const idToken = await usuario.getIdToken();
 
         const respuesta = await fetch(API_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json"
+          },
           body: JSON.stringify({
             idToken,
             codigo: codigoIngresado
@@ -191,13 +427,16 @@
         const datos = await respuesta.json();
 
         if (!respuesta.ok || !datos.ok) {
-          throw new Error(datos.error || "No se pudo realizar la consulta.");
+          throw new Error(
+            datos.error || "No se pudo realizar la consulta."
+          );
         }
 
         const producto = datos.result;
 
         if (!producto.encontrado) {
-          resultado.textContent = "No se encontró un producto con ese código.";
+          resultado.textContent =
+            "No se encontró un producto con ese código.";
           return;
         }
 
@@ -210,7 +449,10 @@
         const detalle = document.createElement("p");
         detalle.textContent =
           "Código: " + producto.codigo +
-          (producto.categoria ? " · Categoría: " + producto.categoria : "");
+          (producto.categoria
+            ? " · Categoría: " + producto.categoria
+            : "");
+
         resultado.appendChild(detalle);
 
         const precios = [
@@ -228,14 +470,20 @@
 
           const monto = document.createElement("span");
           monto.className = "valor";
-          monto.textContent = valor || "No disponible";
+          monto.textContent =
+            valor !== null && valor !== undefined && valor !== ""
+              ? valor
+              : "No disponible";
 
           fila.append(nombre, monto);
           resultado.appendChild(fila);
         }
+
       } catch (error) {
-        resultado.textContent = error.message ||
+        resultado.textContent =
+          error.message ||
           "Ocurrió un error al consultar el producto.";
+
       } finally {
         consultar.disabled = false;
         consultar.textContent = "Consultar precio";
@@ -244,3 +492,4 @@
   </script>
 </body>
 </html>
+
