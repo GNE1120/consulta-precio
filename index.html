@@ -121,7 +121,13 @@
     }
 
     #lector video {
+      width: 100%;
       border-radius: 10px;
+    }
+
+    #ayudaEscaner {
+      font-size: 13px;
+      text-align: center;
     }
 
     [hidden] {
@@ -142,8 +148,8 @@
 
     <section id="buscador" hidden>
       <p>
-        Ingresá el código manualmente o escaneá el código de barras
-        del producto con la cámara.
+        Ingresá un código manualmente o escaneá el código
+        de barras con la cámara.
       </p>
 
       <form id="formulario">
@@ -161,13 +167,13 @@
       </form>
 
       <button id="abrirEscaner" type="button">
-        Escanear código de barras con la cámara
+        Escanear productos con la cámara
       </button>
 
       <div id="zonaEscaner" hidden>
-        <p>
-          Apuntá la cámara trasera al código de barras
-          del producto y mantenelo dentro del recuadro.
+        <p id="ayudaEscaner">
+          Cámara activa: apuntá al código de barras del producto.
+          Después de cada lectura podés escanear el siguiente.
         </p>
 
         <div id="lector"></div>
@@ -185,7 +191,7 @@
     </button>
   </main>
 
-  <!-- Biblioteca para leer códigos de barras -->
+  <!-- Lector de códigos de barras -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <script type="module">
@@ -232,8 +238,11 @@
     let lectorCodigo = null;
     let escaneoActivo = false;
     let procesandoLectura = false;
+    let ultimoCodigoLeido = "";
+    let momentoUltimaLectura = 0;
+    let numeroConsulta = 0;
 
-    // INICIAR SESIÓN CON GOOGLE
+    // INICIO DE SESIÓN
     entrar.addEventListener("click", async () => {
       estado.textContent = "Abriendo inicio de sesión...";
       entrar.disabled = true;
@@ -248,7 +257,7 @@
       }
     });
 
-    // CERRAR SESIÓN
+    // CIERRE DE SESIÓN
     salir.addEventListener("click", async () => {
       await detenerEscaner();
 
@@ -262,8 +271,8 @@
       }
     });
 
-    // CONTROLAR LA SESIÓN
-    onAuthStateChanged(auth, (usuario) => {
+    // ESTADO DE AUTENTICACIÓN
+    onAuthStateChanged(auth, async (usuario) => {
       if (usuario) {
         estado.textContent =
           "Sesión iniciada: " +
@@ -273,16 +282,17 @@
         salir.hidden = false;
         buscador.hidden = false;
       } else {
-        estado.textContent =
-          "Iniciá sesión con tu cuenta de Google.";
+        await detenerEscaner();
 
         entrar.hidden = false;
         salir.hidden = true;
         buscador.hidden = true;
+        estado.textContent =
+          "Iniciá sesión con tu cuenta de Google.";
       }
     });
 
-    // ABRIR LA CÁMARA Y LEER EL CÓDIGO DE BARRAS
+    // ABRIR LA CÁMARA
     abrirEscaner.addEventListener("click", async () => {
       if (!auth.currentUser) {
         estado.textContent = "Primero iniciá sesión con Google.";
@@ -291,14 +301,18 @@
 
       if (!window.Html5Qrcode) {
         estado.textContent =
-          "No se pudo cargar el lector. Revisá tu conexión e intentá nuevamente.";
+          "No se pudo cargar el lector. Revisá tu conexión.";
         return;
       }
+
+      if (escaneoActivo || lectorCodigo) return;
 
       abrirEscaner.disabled = true;
       zonaEscaner.hidden = false;
       estado.textContent = "Preparando la cámara...";
       procesandoLectura = false;
+      ultimoCodigoLeido = "";
+      momentoUltimaLectura = 0;
 
       try {
         lectorCodigo = new Html5Qrcode("lector", {
@@ -318,86 +332,105 @@
           { facingMode: "environment" },
           {
             fps: 10,
-            qrbox: (ancho, alto) => {
-              const anchoCaja = Math.min(ancho * 0.9, 340);
-              const altoCaja = Math.min(alto * 0.45, 180);
-
-              return {
-                width: Math.floor(anchoCaja),
-                height: Math.floor(altoCaja)
-              };
-            },
+            qrbox: (ancho, alto) => ({
+              width: Math.floor(Math.min(ancho * 0.9, 340)),
+              height: Math.floor(Math.min(alto * 0.45, 180))
+            }),
             aspectRatio: 1.777
           },
+
+          // SE EJECUTA CUANDO SE LEE UN CÓDIGO
           async (codigoLeido) => {
-            if (procesandoLectura) return;
+            const valorLeido = codigoLeido.trim();
+            const ahora = Date.now();
+
+            if (!valorLeido || procesandoLectura) return;
+
+            // Ignorar lecturas repetidas del mismo producto
+            // durante un intervalo breve.
+            if (
+              valorLeido === ultimoCodigoLeido &&
+              ahora - momentoUltimaLectura < 2500
+            ) {
+              return;
+            }
 
             procesandoLectura = true;
-            codigo.value = codigoLeido.trim();
+            ultimoCodigoLeido = valorLeido;
+            momentoUltimaLectura = ahora;
+            codigo.value = valorLeido;
 
             estado.textContent =
-              "Código leído. Buscando el producto...";
+              "Código leído. Consultando precios...";
 
-            await detenerEscaner();
+            // La cámara NO se cierra.
             formulario.requestSubmit();
           },
-          () => {
-            // No mostrar errores por cada fotograma sin lectura.
-          }
+
+          // No mostrar errores de cada fotograma sin lectura.
+          () => {}
         );
 
         escaneoActivo = true;
         estado.textContent =
-          "Cámara activa. Enfocá el código de barras.";
+          "Cámara activa. Escaneá el primer producto.";
 
       } catch (error) {
-        console.error("Error al iniciar el escáner:", error);
-
+        console.error("Error al abrir la cámara:", error);
         await detenerEscaner();
 
         estado.textContent =
-          "No se pudo abrir la cámara. Permití el acceso a la cámara " +
-          "y verificá que la página use HTTPS.";
+          "No se pudo abrir la cámara. Permití el acceso " +
+          "a la cámara y verificá que estés usando HTTPS.";
       }
     });
 
-    // CERRAR LA CÁMARA
+    // CERRAR LA CÁMARA MANUALMENTE
     cerrarEscaner.addEventListener("click", async () => {
       await detenerEscaner();
+
       estado.textContent = auth.currentUser
-        ? "Cámara cerrada. Podés consultar otro producto."
+        ? "Cámara cerrada. Podés ingresar otro código."
         : "Iniciá sesión con tu cuenta de Google.";
     });
 
+    // DETENER EL ESCÁNER
     async function detenerEscaner() {
-      if (lectorCodigo) {
+      const lectorAnterior = lectorCodigo;
+      const estabaActivo = escaneoActivo;
+
+      lectorCodigo = null;
+      escaneoActivo = false;
+      procesandoLectura = false;
+
+      if (lectorAnterior) {
         try {
-          if (escaneoActivo) {
-            await lectorCodigo.stop();
+          if (estabaActivo) {
+            await lectorAnterior.stop();
           }
         } catch (error) {
           console.warn("No se pudo detener normalmente la cámara.", error);
         }
 
         try {
-          await lectorCodigo.clear();
+          await lectorAnterior.clear();
         } catch (error) {
           console.warn("No se pudo limpiar el lector.", error);
         }
       }
 
-      lectorCodigo = null;
-      escaneoActivo = false;
       zonaEscaner.hidden = true;
       abrirEscaner.disabled = false;
     }
 
-    // CONSULTAR EL PRODUCTO EN EL SERVIDOR
+    // CONSULTA DE PRECIOS
     formulario.addEventListener("submit", async (evento) => {
       evento.preventDefault();
 
       const codigoIngresado = codigo.value.trim();
       if (!codigoIngresado) return;
+
+      const consultaActual = ++numeroConsulta;
 
       consultar.disabled = true;
       consultar.textContent = "Consultando...";
@@ -431,6 +464,10 @@
             datos.error || "No se pudo realizar la consulta."
           );
         }
+
+        // No mostrar resultados de una consulta anterior
+        // si ya se inició otra consulta más reciente.
+        if (consultaActual !== numeroConsulta) return;
 
         const producto = datos.result;
 
@@ -479,14 +516,27 @@
           resultado.appendChild(fila);
         }
 
+        if (escaneoActivo) {
+          estado.textContent =
+            "Producto encontrado. Podés escanear el siguiente.";
+        }
+
       } catch (error) {
-        resultado.textContent =
-          error.message ||
-          "Ocurrió un error al consultar el producto.";
+        if (consultaActual === numeroConsulta) {
+          resultado.textContent =
+            error.message ||
+            "Ocurrió un error al consultar el producto.";
+        }
 
       } finally {
-        consultar.disabled = false;
-        consultar.textContent = "Consultar precio";
+        if (consultaActual === numeroConsulta) {
+          consultar.disabled = false;
+          consultar.textContent = "Consultar precio";
+        }
+
+        // Permitir una nueva lectura cuando termine
+        // la consulta, aunque la cámara siga abierta.
+        procesandoLectura = false;
       }
     });
   </script>
