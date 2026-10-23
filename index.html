@@ -2,13 +2,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  
-<link rel="manifest" href="/consulta-precio/manifest.json">
-<meta name="theme-color" content="#d94b4b">
-<link rel="apple-touch-icon" href="/consulta-precio/icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Precios">
+  <link rel="manifest" href="/consulta-precio/manifest.json">
+  <meta name="theme-color" content="#d94b4b">
+  <link rel="apple-touch-icon" href="/consulta-precio/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Precios">
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -98,6 +97,25 @@
       margin-top: 22px;
     }
 
+    #busquedaNombre {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid #dfe4ec;
+    }
+
+    #listaProductos {
+      margin-top: 10px;
+    }
+
+    #listaProductos button {
+      margin-top: 8px;
+      background: #e9effb;
+      color: #172033;
+      text-align: left;
+      font-weight: normal;
+      overflow-wrap: anywhere;
+    }
+
     #resultado {
       padding: 16px;
       border-radius: 12px;
@@ -156,10 +174,11 @@
 
     <section id="buscador" hidden>
       <p>
-        Ingresá un código manualmente o escaneá el código
-        de barras con la cámara.
+        Ingresá un código manualmente, buscá por nombre
+        o escaneá el código de barras con la cámara.
       </p>
 
+      <!-- CONSULTA POR CÓDIGO -->
       <form id="formulario">
         <input
           id="codigo"
@@ -174,6 +193,29 @@
         </button>
       </form>
 
+      <!-- NUEVA BÚSQUEDA POR NOMBRE -->
+      <div id="busquedaNombre">
+        <h2>Buscar por nombre</h2>
+
+        <form id="formularioNombre">
+          <input
+            id="nombreProducto"
+            type="text"
+            placeholder="Ej.: Samsung, auricular..."
+            autocomplete="off"
+            minlength="2"
+            required
+          >
+
+          <button id="buscarNombre" type="submit">
+            Buscar producto
+          </button>
+        </form>
+
+        <div id="listaProductos" aria-live="polite"></div>
+      </div>
+
+      <!-- ESCÁNER DE CÓDIGOS -->
       <button id="abrirEscaner" type="button">
         Escanear productos con la cámara
       </button>
@@ -191,6 +233,7 @@
         </button>
       </div>
 
+      <!-- RESULTADO DE LA CONSULTA -->
       <div id="resultado" hidden></div>
     </section>
 
@@ -199,7 +242,6 @@
     </button>
   </main>
 
-  <!-- Lector de códigos de barras -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <script type="module">
@@ -234,10 +276,20 @@
     const salir = document.getElementById("salir");
     const estado = document.getElementById("estado");
     const buscador = document.getElementById("buscador");
+
     const formulario = document.getElementById("formulario");
     const codigo = document.getElementById("codigo");
     const consultar = document.getElementById("consultar");
     const resultado = document.getElementById("resultado");
+
+    const formularioNombre =
+      document.getElementById("formularioNombre");
+    const nombreProducto =
+      document.getElementById("nombreProducto");
+    const buscarNombre =
+      document.getElementById("buscarNombre");
+    const listaProductos =
+      document.getElementById("listaProductos");
 
     const abrirEscaner = document.getElementById("abrirEscaner");
     const cerrarEscaner = document.getElementById("cerrarEscaner");
@@ -249,6 +301,7 @@
     let ultimoCodigoLeido = "";
     let momentoUltimaLectura = 0;
     let numeroConsulta = 0;
+    let numeroBusquedaNombre = 0;
 
     // INICIO DE SESIÓN
     entrar.addEventListener("click", async () => {
@@ -271,9 +324,12 @@
 
       try {
         await signOut(auth);
+
         resultado.hidden = true;
         resultado.replaceChildren();
         codigo.value = "";
+        nombreProducto.value = "";
+        listaProductos.replaceChildren();
       } catch (error) {
         estado.textContent = "No se pudo cerrar la sesión.";
       }
@@ -295,15 +351,171 @@
         entrar.hidden = false;
         salir.hidden = true;
         buscador.hidden = true;
+
+        resultado.hidden = true;
+        resultado.replaceChildren();
+        listaProductos.replaceChildren();
+
         estado.textContent =
           "Iniciá sesión con tu cuenta de Google.";
+      }
+    });
+
+    // MOSTRAR PRODUCTO Y SUS TRES PRECIOS
+    // Nunca se muestra el precio de costo.
+    function mostrarProducto(producto) {
+      resultado.replaceChildren();
+      resultado.hidden = false;
+
+      const titulo = document.createElement("h2");
+      titulo.textContent = producto.producto || "Producto";
+      resultado.appendChild(titulo);
+
+      const detalle = document.createElement("p");
+
+      detalle.textContent =
+        (producto.codigo
+          ? "Código: " + producto.codigo
+          : "Sin código") +
+        (producto.categoria
+          ? " · Categoría: " + producto.categoria
+          : "");
+
+      resultado.appendChild(detalle);
+
+      const precios = [
+        ["Precio público", producto.publico],
+        ["Precio vendedor", producto.vendedor],
+        ["Precio gremio", producto.gremio]
+      ];
+
+      for (const [etiqueta, valor] of precios) {
+        const fila = document.createElement("div");
+        fila.className = "precio";
+
+        const nombre = document.createElement("span");
+        nombre.textContent = etiqueta;
+
+        const monto = document.createElement("span");
+        monto.className = "valor";
+
+        monto.textContent =
+          valor !== null &&
+          valor !== undefined &&
+          valor !== ""
+            ? valor
+            : "No disponible";
+
+        fila.append(nombre, monto);
+        resultado.appendChild(fila);
+      }
+    }
+
+    // BUSCAR PRODUCTOS POR NOMBRE
+    formularioNombre.addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+
+      const nombre = nombreProducto.value.trim();
+
+      if (nombre.length < 2) {
+        listaProductos.textContent =
+          "Escribí al menos 2 letras para buscar.";
+        return;
+      }
+
+      const busquedaActual = ++numeroBusquedaNombre;
+
+      buscarNombre.disabled = true;
+      buscarNombre.textContent = "Buscando...";
+      listaProductos.textContent = "Buscando productos...";
+
+      try {
+        const usuario = auth.currentUser;
+
+        if (!usuario) {
+          throw new Error("Iniciá sesión nuevamente.");
+        }
+
+        const idToken = await usuario.getIdToken();
+
+        const respuesta = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            idToken,
+            accion: "buscarPorNombre",
+            nombre
+          })
+        });
+
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok || !datos.ok) {
+          throw new Error(
+            datos.error || "No se pudo buscar."
+          );
+        }
+
+        // Evitar mostrar resultados de una búsqueda anterior.
+        if (busquedaActual !== numeroBusquedaNombre) return;
+
+        listaProductos.replaceChildren();
+
+        if (!Array.isArray(datos.result) || datos.result.length === 0) {
+          listaProductos.textContent =
+            "No se encontraron productos.";
+          return;
+        }
+
+        const aviso = document.createElement("p");
+        aviso.textContent =
+          "Resultados encontrados: " +
+          datos.result.length +
+          ". Seleccioná un producto.";
+        listaProductos.appendChild(aviso);
+
+        for (const producto of datos.result) {
+          const boton = document.createElement("button");
+          boton.type = "button";
+
+          boton.textContent =
+            producto.producto +
+            (producto.categoria
+              ? " · " + producto.categoria
+              : "") +
+            (producto.codigo
+              ? " · Código: " + producto.codigo
+              : " · Sin código");
+
+          boton.addEventListener("click", () => {
+            mostrarProducto(producto);
+            estado.textContent =
+              "Producto seleccionado: " + producto.producto;
+          });
+
+          listaProductos.appendChild(boton);
+        }
+
+      } catch (error) {
+        if (busquedaActual === numeroBusquedaNombre) {
+          listaProductos.textContent =
+            error.message || "Ocurrió un error al buscar.";
+        }
+      } finally {
+        if (busquedaActual === numeroBusquedaNombre) {
+          buscarNombre.disabled = false;
+          buscarNombre.textContent = "Buscar producto";
+        }
       }
     });
 
     // ABRIR LA CÁMARA
     abrirEscaner.addEventListener("click", async () => {
       if (!auth.currentUser) {
-        estado.textContent = "Primero iniciá sesión con Google.";
+        estado.textContent =
+          "Primero iniciá sesión con Google.";
         return;
       }
 
@@ -336,23 +548,21 @@
           verbose: false
         });
 
-    
-await lectorCodigo.start(
-  { facingMode: "environment" },
+        await lectorCodigo.start(
+          { facingMode: "environment" },
+          {
+            fps: 15,
+            qrbox: (ancho, alto) => {
+              const anchoCaja = Math.min(ancho * 0.95, 420);
+              const altoCaja = Math.min(alto * 0.55, 220);
 
-  {
-    fps: 15,
-    qrbox: (ancho, alto) => {
-      const anchoCaja = Math.min(ancho * 0.95, 420);
-      const altoCaja = Math.min(alto * 0.55, 220);
-
-      return {
-        width: Math.floor(anchoCaja),
-        height: Math.floor(altoCaja)
-      };
-    },
-    aspectRatio: 16 / 9
-  },
+              return {
+                width: Math.floor(anchoCaja),
+                height: Math.floor(altoCaja)
+              };
+            },
+            aspectRatio: 16 / 9
+          },
 
           // SE EJECUTA CUANDO SE LEE UN CÓDIGO
           async (codigoLeido) => {
@@ -361,8 +571,7 @@ await lectorCodigo.start(
 
             if (!valorLeido || procesandoLectura) return;
 
-            // Ignorar lecturas repetidas del mismo producto
-            // durante un intervalo breve.
+            // Ignorar lecturas repetidas del mismo producto.
             if (
               valorLeido === ultimoCodigoLeido &&
               ahora - momentoUltimaLectura < 2500
@@ -378,7 +587,7 @@ await lectorCodigo.start(
             estado.textContent =
               "Código leído. Consultando precios...";
 
-            // La cámara NO se cierra.
+            // La cámara permanece abierta.
             formulario.requestSubmit();
           },
 
@@ -390,25 +599,23 @@ await lectorCodigo.start(
         estado.textContent =
           "Cámara activa. Escaneá el primer producto.";
 
-      
-} catch (error) {
-  console.error("Error al abrir la cámara:", error);
-  await detenerEscaner();
+      } catch (error) {
+        console.error("Error al abrir la cámara:", error);
+        await detenerEscaner();
 
-  const nombreError = error?.name || "Error desconocido";
-  const mensajeError = error?.message || "Sin detalles";
+        const nombreError = error?.name || "Error desconocido";
+        const mensajeError = error?.message || "Sin detalles";
 
-  estado.textContent =
-    "Error de cámara (" + nombreError + "): " + mensajeError;
+        estado.textContent =
+          "Error de cámara (" + nombreError + "): " + mensajeError;
 
-  console.error("Detalle del error:", {
-    nombre: nombreError,
-    mensaje: mensajeError,
-    seguro: window.isSecureContext,
-    mediaDevicesDisponible: !!navigator.mediaDevices
-  });
-}
-
+        console.error("Detalle del error:", {
+          nombre: nombreError,
+          mensaje: mensajeError,
+          seguro: window.isSecureContext,
+          mediaDevicesDisponible: !!navigator.mediaDevices
+        });
+      }
     });
 
     // CERRAR LA CÁMARA MANUALMENTE
@@ -435,7 +642,10 @@ await lectorCodigo.start(
             await lectorAnterior.stop();
           }
         } catch (error) {
-          console.warn("No se pudo detener normalmente la cámara.", error);
+          console.warn(
+            "No se pudo detener normalmente la cámara.",
+            error
+          );
         }
 
         try {
@@ -449,7 +659,7 @@ await lectorCodigo.start(
       abrirEscaner.disabled = false;
     }
 
-    // CONSULTA DE PRECIOS
+    // CONSULTA DE PRECIOS POR CÓDIGO DE BARRAS
     formulario.addEventListener("submit", async (evento) => {
       evento.preventDefault();
 
@@ -491,56 +701,18 @@ await lectorCodigo.start(
           );
         }
 
-        // No mostrar resultados de una consulta anterior
-        // si ya se inició otra consulta más reciente.
+        // Evitar mostrar resultados de una consulta anterior.
         if (consultaActual !== numeroConsulta) return;
 
         const producto = datos.result;
 
-        if (!producto.encontrado) {
+        if (!producto || !producto.encontrado) {
           resultado.textContent =
             "No se encontró un producto con ese código.";
           return;
         }
 
-        resultado.replaceChildren();
-
-        const titulo = document.createElement("h2");
-        titulo.textContent = producto.producto || "Producto";
-        resultado.appendChild(titulo);
-
-        const detalle = document.createElement("p");
-        detalle.textContent =
-          "Código: " + producto.codigo +
-          (producto.categoria
-            ? " · Categoría: " + producto.categoria
-            : "");
-
-        resultado.appendChild(detalle);
-
-        const precios = [
-          ["Precio público", producto.publico],
-          ["Precio vendedor", producto.vendedor],
-          ["Precio gremio", producto.gremio]
-        ];
-
-        for (const [etiqueta, valor] of precios) {
-          const fila = document.createElement("div");
-          fila.className = "precio";
-
-          const nombre = document.createElement("span");
-          nombre.textContent = etiqueta;
-
-          const monto = document.createElement("span");
-          monto.className = "valor";
-          monto.textContent =
-            valor !== null && valor !== undefined && valor !== ""
-              ? valor
-              : "No disponible";
-
-          fila.append(nombre, monto);
-          resultado.appendChild(fila);
-        }
+        mostrarProducto(producto);
 
         if (escaneoActivo) {
           estado.textContent =
@@ -553,31 +725,31 @@ await lectorCodigo.start(
             error.message ||
             "Ocurrió un error al consultar el producto.";
         }
-
       } finally {
         if (consultaActual === numeroConsulta) {
           consultar.disabled = false;
           consultar.textContent = "Consultar precio";
         }
 
-        // Permitir una nueva lectura cuando termine
-        // la consulta, aunque la cámara siga abierta.
+        // Permitir otra lectura aunque la cámara siga abierta.
         procesandoLectura = false;
       }
     });
   </script>
 
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/consulta-precio/sw.js")
-        .catch((error) => {
-          console.error("Error al registrar la aplicación:", error);
-        });
-    });
-  }
-</script>
-
+  <!-- REGISTRO DE LA APLICACIÓN PWA -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/consulta-precio/sw.js")
+          .catch((error) => {
+            console.error(
+              "Error al registrar la aplicación:",
+              error
+            );
+          });
+      });
+    }
+  </script>
 </body>
 </html>
-
