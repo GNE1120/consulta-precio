@@ -61,6 +61,11 @@
       font-size: 16px;
     }
 
+    input:focus {
+      outline: 2px solid #b8d0ff;
+      border-color: #175cd3;
+    }
+
     button {
       width: 100%;
       padding: 14px;
@@ -97,23 +102,62 @@
       margin-top: 22px;
     }
 
+    /* PANEL DE BÚSQUEDA POR NOMBRE */
     #busquedaNombre {
-      margin-top: 28px;
-      padding-top: 18px;
-      border-top: 1px solid #dfe4ec;
+      margin-top: 18px;
+      padding: 18px;
+      background: #f5f7fb;
+      border: 1px solid #e5eaf2;
+      border-radius: 12px;
+    }
+
+    #busquedaNombre h2 {
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+
+    #formularioNombre input {
+      margin-top: 0;
     }
 
     #listaProductos {
       margin-top: 10px;
     }
 
+    #listaProductos:empty {
+      display: none;
+    }
+
     #listaProductos button {
       margin-top: 8px;
-      background: #e9effb;
-      color: #172033;
+      background: #ffffff;
+      border: 1px solid #dfe5ef;
+      color: #24334b;
       text-align: left;
       font-weight: normal;
       overflow-wrap: anywhere;
+    }
+
+    /* PANEL DE BÚSQUEDA POR CÓDIGO */
+    #busquedaCodigo {
+      margin-top: 26px;
+      padding-top: 22px;
+      border-top: 1px solid #dfe4ec;
+    }
+
+    #busquedaCodigo > p {
+      margin: 0 0 12px;
+      font-size: 14px;
+    }
+
+    #formulario input {
+      margin-top: 0;
+    }
+
+    #abrirEscaner {
+      background: #ffffff;
+      border: 1px solid #d4dce8;
+      color: #34445c;
     }
 
     #resultado {
@@ -159,6 +203,17 @@
     [hidden] {
       display: none !important;
     }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+        align-items: start;
+      }
+
+      .panel {
+        padding: 24px 18px;
+      }
+    }
   </style>
 </head>
 
@@ -174,26 +229,11 @@
 
     <section id="buscador" hidden>
       <p>
-        Ingresá un código manualmente, buscá por nombre
-        o escaneá el código de barras con la cámara.
+        Buscá un producto por su nombre o ingresá su código
+        de barras para consultar los precios.
       </p>
 
-      <!-- CONSULTA POR CÓDIGO -->
-      <form id="formulario">
-        <input
-          id="codigo"
-          type="text"
-          placeholder="Código de barras"
-          autocomplete="off"
-          required
-        >
-
-        <button id="consultar" type="submit">
-          Consultar precio
-        </button>
-      </form>
-
-      <!-- NUEVA BÚSQUEDA POR NOMBRE -->
+      <!-- BÚSQUEDA POR NOMBRE -->
       <div id="busquedaNombre">
         <h2>Buscar por nombre</h2>
 
@@ -215,22 +255,41 @@
         <div id="listaProductos" aria-live="polite"></div>
       </div>
 
-      <!-- ESCÁNER DE CÓDIGOS -->
-      <button id="abrirEscaner" type="button">
-        Escanear productos con la cámara
-      </button>
+      <!-- BÚSQUEDA POR CÓDIGO -->
+      <div id="busquedaCodigo">
+        <p><strong>¿Tenés el código de barras?</strong></p>
 
-      <div id="zonaEscaner" hidden>
-        <p id="ayudaEscaner">
-          Cámara activa: apuntá al código de barras del producto.
-          Después de cada lectura podés escanear el siguiente.
-        </p>
+        <form id="formulario">
+          <input
+            id="codigo"
+            type="text"
+            placeholder="Ingresá el código de barras"
+            autocomplete="off"
+            required
+          >
 
-        <div id="lector"></div>
+          <button id="consultar" type="submit">
+            Consultar por código
+          </button>
+        </form>
 
-        <button id="cerrarEscaner" type="button">
-          Cerrar cámara
+        <!-- ESCÁNER DE CÓDIGOS -->
+        <button id="abrirEscaner" type="button">
+          Escanear productos con la cámara
         </button>
+
+        <div id="zonaEscaner" hidden>
+          <p id="ayudaEscaner">
+            Cámara activa: apuntá al código de barras del producto.
+            Después de cada lectura podés escanear el siguiente.
+          </p>
+
+          <div id="lector"></div>
+
+          <button id="cerrarEscaner" type="button">
+            Cerrar cámara
+          </button>
+        </div>
       </div>
 
       <!-- RESULTADO DE LA CONSULTA -->
@@ -258,7 +317,7 @@
       "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 
     const firebaseConfig = {
-      apiKey: "AIzaSyDmOBSD4DGJr1Lntj3b34ibTwtvN1snwa0",
+      apiKey: "AIzaSyDmOBSD4DGJr1Lntj3b34ibTwtvN1snwa",
       authDomain: "consultaprecios-7bc91.firebaseapp.com",
       projectId: "consultaprecios-7bc91",
       storageBucket: "consultaprecios-7bc91.firebasestorage.app",
@@ -728,7 +787,7 @@
       } finally {
         if (consultaActual === numeroConsulta) {
           consultar.disabled = false;
-          consultar.textContent = "Consultar precio";
+          consultar.textContent = "Consultar por código";
         }
 
         // Permitir otra lectura aunque la cámara siga abierta.
